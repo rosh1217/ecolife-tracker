@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>EcoLife AI Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- Google Login -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body { font-family: Arial, sans-serif; background: #f4f7f6; padding: 20px; margin: 0; }
+h1 { text-align:center; color:#2e7d32; }
+.card { background: #fff; padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+input { width: 100%; padding: 10px; margin: 5px 0; border-radius: 8px; border: 1px solid #ccc; }
+button { padding: 10px; background: #2e7d32; color: #fff; border: none; border-radius: 8px; cursor: pointer; width: 100%; }
+button:hover { opacity: 0.9; }
+.chatbox { height: 180px; overflow-y: auto; background: #e8f5e9; padding: 10px; border-radius: 8px; margin-top: 10px; }
+.msg { margin-bottom: 8px; }
+.user { font-weight: bold; }
+.bot { color: #2e7d32; }
+.hidden { display: none; }
+.search { width: 100%; padding: 12px; border-radius: 25px; border: 1px solid #ccc; }
+</style>
+</head>
+<body>
+
+<h1>🌍 EcoLife AI</h1>
+
+<!-- GOOGLE LOGIN -->
+<div id="login"></div>
+
+<!-- MAIN APP -->
+<div id="app" class="hidden">
+
+  <!-- ECO INPUTS -->
+  <div class="card">
+    <h2>📊 Sustainability Tracker</h2>
+    <input id="carbon" placeholder="Carbon Footprint (kg/day)">
+    <input id="water" placeholder="Water Usage (liters/day)">
+    <input id="energy" placeholder="Energy Usage (kWh/day)">
+    <button onclick="saveData()">Calculate & Save</button>
+    <div id="score"></div>
+  </div>
+
+  <!-- ECO CHART -->
+  <div class="card">
+    <h2>📈 Your Eco Score History</h2>
+    <canvas id="chart"></canvas>
+  </div>
+
+  <!-- AI BOT -->
+  <div class="card">
+    <h2>🤖 Ask EcoLife AI</h2>
+    <input id="q" placeholder="Ask eco-friendly questions...">
+    <button onclick="askAI()">Ask</button>
+    <div class="chatbox" id="a"></div>
+  </div>
+
+  <!-- SEARCH BAR -->
+  <div class="card">
+    <input class="search" placeholder="🔎 Search eco-friendly alternatives..." oninput="ecoSearch(this.value)">
+    <div id="searchResult"></div>
+  </div>
+
+</div>
+
+<script>
+let email = "";
+let chart;
+const backendURL = "https://YOUR-RENDER-BACKEND-URL"; // 🔹 Replace with your deployed backend
+
+// GOOGLE LOGIN
+google.accounts.id.initialize({
+  client_id: "PASTE_GOOGLE_CLIENT_ID_HERE", // 🔹 Replace with your Google Client ID
+  callback: (res) => {
+    const payload = JSON.parse(atob(res.credential.split(".")[1]));
+    email = payload.email;
+    document.getElementById("login").classList.add("hidden");
+    document.getElementById("app").classList.remove("hidden");
+    loadHistory();
+  }
+});
+google.accounts.id.renderButton(
+  document.getElementById("login"),
+  { theme: "outline", size: "large" }
+);
+
+// SAVE ECO DATA
+function saveData() {
+  const c = +document.getElementById("carbon").value || 0;
+  const w = +document.getElementById("water").value || 0;
+  const e = +document.getElementById("energy").value || 0;
+  const score = Math.max(0, 100 - (c*10) - (w/10) - (e*5));
+
+  document.getElementById("score").innerHTML = `<b>Eco Score:</b> ${score.toFixed(0)}`;
+
+  fetch(`${backendURL}/save`, {
+    method: "POST",
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({email, carbon:c, water:w, energy:e, score})
+  }).then(loadHistory);
+}
+
+// LOAD HISTORY & UPDATE CHART
+function loadHistory() {
+  fetch(`${backendURL}/history/${email}`)
+    .then(r=>r.json())
+    .then(data=>{
+      const labels = data.map(d=>d.date);
+      const scores = data.map(d=>d.score);
+      if(chart) chart.destroy();
+      chart = new Chart(document.getElementById("chart"), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{ label: "Eco Score", data: scores, backgroundColor:"#2e7d32", borderColor:"#2e7d32", fill:false }]
+        }
+      });
+    });
+}
+
+// ASK REAL AI
+function askAI() {
+  const question = document.getElementById("q").value;
+  if(!question) return;
+  document.getElementById("a").innerHTML += `<div class="msg user">You: ${question}</div>`;
+  fetch(`${backendURL}/ai`, {
+    method:"POST",
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ message: question })
+  })
+  .then(r=>r.json())
+  .then(d=>{
+    document.getElementById("a").innerHTML += `<div class="msg bot">EcoLife AI: ${d.reply}</div>`;
+    const chatbox = document.getElementById("a");
+    chatbox.scrollTop = chatbox.scrollHeight;
+    document.getElementById("q").value = "";
+  });
+}
+
+// ECO-FRIENDLY SEARCH
+function ecoSearch(text){
+  let r="";
+  if(text.includes("plastic")) r="♻️ Use bamboo, steel, or glass alternatives.";
+  if(text.includes("food")) r="🥗 Plant-based foods have lower emissions.";
+  if(text.includes("travel")) r="🚲 Walking, cycling & public transport are best.";
+  document.getElementById("searchResult").innerHTML = r;
+}
+</script>
+
+</body>
+</html>
